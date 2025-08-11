@@ -32,12 +32,20 @@ def load_star_catalog() -> List[CatalogStar]:
         raw = json.load(f)
     stars: List[CatalogStar] = []
     for item in raw:
+        # Aceptar ambos esquemas: nuevo (ra, dec, mag) y anterior (ra_hours, dec_deg, magnitude)
+        ra_value = item.get("ra", item.get("ra_hours"))
+        dec_value = item.get("dec", item.get("dec_deg"))
+        mag_value = item.get("mag", item.get("magnitude"))
+
+        if ra_value is None or dec_value is None or mag_value is None or "name" not in item:
+            raise ValueError("Entrada de catálogo inválida: se requieren name, y ra/ra_hours, dec/dec_deg, mag/magnitude")
+
         stars.append(
             CatalogStar(
-                name=item["name"],
-                ra_hours=float(item["ra_hours"]),
-                dec_deg=float(item["dec_deg"]),
-                magnitude=float(item["magnitude"]),
+                name=str(item["name"]),
+                ra_hours=float(ra_value),
+                dec_deg=float(dec_value),
+                magnitude=float(mag_value),
             )
         )
     return stars
