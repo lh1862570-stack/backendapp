@@ -8,6 +8,9 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Optional
 
+# Skyfield para cálculos astronómicos de alta precisión
+from skyfield.api import Star, load, wgs84
+
 
 @dataclass
 class CatalogStar:
@@ -206,4 +209,41 @@ def get_visible_stars(
 
     return results
 
+
+
+def compute_visible_stars(lat: float, lon: float, date_iso: Optional[str]) -> List[Dict[str, float]]:
+    """
+    Calcula altitud y acimut usando Skyfield para las estrellas del catálogo.
+    Devuelve solo estrellas con altitud > 0°.
+
+    Parámetros:
+    - lat: Latitud del observador (grados; sur negativo)
+    - lon: Longitud del observador (grados; oeste negativo)
+    - date_iso: Fecha/hora en ISO 8601 (UTC). Si None o vacío, usa ahora (UTC)
+
+    Retorna: Lista de dicts {name, magnitude, altitude_deg, azimuth_deg}
+    """
+    dt_utc = _parse_iso_datetime_utc(date_iso)
+    ts = load.timescale()
+    t = ts.from_datetime(dt_utc)
+
+    observer = wgs84.latlon(latitude_degrees=float(lat), longitude_degrees=float(lon))
+
+    visible: List[Dict[str, float]] = []
+    for star in load_star_catalog():
+        sf_star = Star(ra_hours=star.ra_hours, dec_degrees=star.dec_deg)
+        astrometric = observer.at(t).observe(sf_star).apparent()
+        alt, az, _distance = astrometric.altaz()
+        alt_deg = float(alt.degrees)
+        if alt_deg > 0.0:
+            visible.append(
+                {
+                    "name": star.name,
+                    "magnitude": star.magnitude,
+                    "altitude_deg": alt_deg,
+                    "azimuth_deg": float(az.degrees) % 360.0,
+                }
+            )
+
+    return visible
 
