@@ -1,0 +1,14 @@
+[
+  { "name": "Sirius",    "ra_hours": 6.752477,  "dec_deg": -16.716111, "magnitude": -1.46 },
+  { "name": "Canopus",   "ra_hours": 6.399197,  "dec_deg": -52.695661, "magnitude": -0.74 },
+  { "name": "Arcturus",  "ra_hours": 14.261020, "dec_deg": 19.182414,  "magnitude": -0.05 },
+  { "name": "Vega",      "ra_hours": 18.615649, "dec_deg": 38.783689,  "magnitude": 0.03 },
+  { "name": "Capella",   "ra_hours": 5.278155,  "dec_deg": 45.997991,  "magnitude": 0.08 },
+  { "name": "Rigel",     "ra_hours": 5.242298,  "dec_deg": -8.201638,  "magnitude": 0.12 },
+  { "name": "Procyon",   "ra_hours": 7.655033,  "dec_deg": 5.224988,   "magnitude": 0.38 },
+  { "name": "Achernar",  "ra_hours": 1.628568,  "dec_deg": -57.236753, "magnitude": 0.46 },
+  { "name": "Betelgeuse","ra_hours": 5.919529,  "dec_deg": 7.407064,   "magnitude": 0.50 },
+  { "name": "Altair",    "ra_hours": 19.846389, "dec_deg": 8.868321,   "magnitude": 0.77 }
+]
+
+
