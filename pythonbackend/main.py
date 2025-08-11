@@ -1,7 +1,7 @@
 from typing import List, Optional
 from fastapi import FastAPI, Query
 from pydantic import BaseModel
-from star_service import get_visible_stars
+from star_service import get_visible_stars, compute_visible_stars
 
 
 app = FastAPI(
@@ -52,6 +52,18 @@ def visible_stars(
     # FastAPI/Pydantic realizará la conversión a VisibleStar automáticamente
     return stars
 
+
+@app.get("/sky", response_model=List[VisibleStar])
+def sky(
+    lat: float = Query(..., description="Latitud del observador en grados (sur negativo)"),
+    lon: float = Query(..., description="Longitud del observador en grados (oeste negativo)"),
+    date: Optional[str] = Query(
+        None,
+        description="Fecha/hora en formato ISO 8601 (UTC). Ej: 2024-01-01T02:30:00Z. Si se omite, se usa la hora actual en UTC.",
+    ),
+) -> List[VisibleStar]:
+    stars = compute_visible_stars(lat=lat, lon=lon, date_iso=date)
+    return stars
 
 if __name__ == "__main__":
     # Ejecución directa: uvicorn con autoreload para desarrollo
