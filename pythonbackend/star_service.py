@@ -10,6 +10,7 @@ from typing import Dict, List, Optional
 
 # Skyfield para cálculos astronómicos de alta precisión
 from skyfield.api import Star, load, wgs84
+from skyfield import almanac
 
 
 @dataclass
@@ -170,6 +171,163 @@ def _equatorial_to_horizontal(
     alt_deg = _rad_to_deg(alt_rad)
     az_deg = _normalize_degrees_360(_rad_to_deg(az_rad))
     return {"altitude_deg": alt_deg, "azimuth_deg": az_deg}
+
+
+# ------------------------- Cuerpos del Sistema Solar -------------------------
+
+@lru_cache(maxsize=1)
+def _load_ephemeris():
+    # Kernel estándar relativamente liviano
+    return load("de421.bsp")
+
+
+def _planet_magnitude(planet_name: str, r_au: float, delta_au: float, phase_angle_deg: float) -> Optional[float]:
+    """Magnitudes visuales aproximadas para planetas principales.
+
+    Fórmulas empíricas simplificadas. r = distancia Sol-planeta (AU),
+    Δ = distancia Tierra-planeta (AU), α = ángulo de fase (grados).
+    """
+    import math as _math
+
+    log_term = 5.0 * _math.log10(max(1e-12, r_au * delta_au))
+    a = phase_angle_deg
+
+    name = planet_name.lower()
+    if name == "mercury":
+        return -0.60 + log_term + 0.0380 * a - 0.000273 * a * a + 0.000002 * a * a * a
+    if name == "venus":
+        return -4.47 + log_term + 0.036 * a - 0.000000484 * (a ** 3)
+    if name == "mars":
+        return -1.52 + log_term + 0.016 * a
+    if name == "jupiter barycenter" or name == "jupiter":
+        return -9.40 + log_term + 0.005 * a
+    if name == "saturn barycenter" or name == "saturn":
+        # Sin contribuir con anillos (aprox)
+        return -8.88 + log_term + 0.044 * a
+    if name == "uranus barycenter" or name == "uranus":
+        return -7.19 + log_term + 0.002 * a
+    if name == "neptune barycenter" or name == "neptune":
+        return -6.87 + log_term
+    return None
+
+
+def _moon_magnitude(phase_angle_deg: float, delta_km: float) -> float:
+    """Magnitud lunar aproximada basada en fase; muy simplificada.
+
+    No corrige todos los efectos; suficiente para orden de magnitud.
+    """
+    import math as _math
+
+    a = phase_angle_deg
+    # Relación empírica (aprox): Meeus-like
+    m = -12.7 + 0.026 * _math.fabs(a) + 4e-9 * (a ** 4)
+    # Corrección leve por distancia (referencia ~384400 km):
+    if delta_km > 0:
+        m += 5.0 * _math.log10(delta_km / 384400.0)
+    return m
+
+
+def get_visible_bodies(
+    *,
+    latitude_deg: float,
+    longitude_deg: float,
+    when_iso_utc: Optional[str] = None,
+    minimum_altitude_deg: float = -90.0,
+) -> List[Dict[str, float]]:
+    """
+    Calcula posiciones (alt-az) de cuerpos brillantes del Sistema Solar y devuelve
+    una lista con dicts: {name, type, magnitude?, altitude_deg, azimuth_deg, phase?, distance_km?, distance_au?}.
+    """
+    dt_utc = _parse_iso_datetime_utc(when_iso_utc)
+    ts = load.timescale()
+    t = ts.from_datetime(dt_utc)
+
+    eph = _load_ephemeris()
+
+    observer = wgs84.latlon(latitude_degrees=float(latitude_deg), longitude_degrees=float(longitude_deg))
+
+    results: List[Dict[str, float]] = []
+
+    bodies_planets = [
+        ("Mercury", "planet", eph["mercury"]),
+        ("Venus", "planet", eph["venus"]),
+        ("Mars", "planet", eph["mars"]),
+        ("Jupiter", "planet", eph["jupiter barycenter"]),
+        ("Saturn", "planet", eph["saturn barycenter"]),
+        ("Uranus", "planet", eph["uranus barycenter"]),
+        ("Neptune", "planet", eph["neptune barycenter"]),
+    ]
+
+    # Sol
+    sun_app = observer.at(t).observe(eph["sun"]).apparent()
+    sun_alt, sun_az, sun_dist = sun_app.altaz()
+    if float(sun_alt.degrees) >= minimum_altitude_deg:
+        results.append(
+            {
+                "name": "Sun",
+                "type": "sun",
+                "magnitude": -26.74,
+                "altitude_deg": float(sun_alt.degrees),
+                "azimuth_deg": float(sun_az.degrees) % 360.0,
+                "distance_au": float(sun_dist.au),
+            }
+        )
+
+    # Luna
+    moon_app = observer.at(t).observe(eph["moon"]).apparent()
+    moon_alt, moon_az, moon_dist = moon_app.altaz()
+    if float(moon_alt.degrees) >= minimum_altitude_deg:
+        # Fase (fracción iluminada 0..1) y ángulo de fase en grados
+        frac = float(almanac.fraction_illuminated(eph, "moon", t))
+        phase_angle = float(almanac.phase_angle(eph, "moon", t).degrees)
+        mag_moon = _moon_magnitude(phase_angle_deg=phase_angle, delta_km=float(moon_dist.km))
+        results.append(
+            {
+                "name": "Moon",
+                "type": "moon",
+                "magnitude": mag_moon,
+                "altitude_deg": float(moon_alt.degrees),
+                "azimuth_deg": float(moon_az.degrees) % 360.0,
+                "phase": frac,
+                "distance_km": float(moon_dist.km),
+            }
+        )
+
+    # Planetas
+    earth = eph["earth"]
+    sun = eph["sun"]
+    for name, ptype, body in bodies_planets:
+        app = observer.at(t).observe(body).apparent()
+        alt, az, dist_topo = app.altaz()
+        alt_deg = float(alt.degrees)
+        if alt_deg < minimum_altitude_deg:
+            continue
+
+        # Distancia geocéntrica y heliocéntrica para magnitud
+        geo = earth.at(t).observe(body).apparent().distance().au
+        helio = sun.at(t).observe(body).apparent().distance().au
+        try:
+            phase = float(almanac.phase_angle(eph, body, t).degrees)
+        except Exception:
+            phase = 0.0
+
+        magnitude = _planet_magnitude(body.target_name.lower() if hasattr(body, "target_name") else name.lower(), helio, geo, phase)
+
+        item: Dict[str, float] = {
+            "name": name,
+            "type": ptype,
+            "altitude_deg": alt_deg,
+            "azimuth_deg": float(az.degrees) % 360.0,
+            "distance_au": float(dist_topo.au),
+        }
+        if magnitude is not None:
+            item["magnitude"] = magnitude
+
+        results.append(item)
+
+    # Ordenar por altitud descendente
+    results.sort(key=lambda x: x.get("altitude_deg", -1e9), reverse=True)
+    return results
 
 
 def get_visible_stars(

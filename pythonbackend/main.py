@@ -1,7 +1,7 @@
 from typing import List, Optional, Dict
 from fastapi import FastAPI, Query
 from pydantic import BaseModel
-from star_service import get_visible_stars, compute_visible_stars
+from star_service import get_visible_stars, compute_visible_stars, get_visible_bodies
 
 
 app = FastAPI(
@@ -68,6 +68,35 @@ def sky(
 ) -> List[VisibleStar]:
     stars = compute_visible_stars(lat=lat, lon=lon, date_iso=date)
     return stars
+
+
+class VisibleBody(BaseModel):
+    name: str
+    type: str  # planet | moon | sun | comet | asteroid
+    altitude_deg: float
+    azimuth_deg: float
+    magnitude: Optional[float] = None
+    phase: Optional[float] = None
+    distance_km: Optional[float] = None
+    distance_au: Optional[float] = None
+
+
+@app.get("/visible-bodies", response_model=List[VisibleBody])
+def visible_bodies(
+    lat: float = Query(..., description="Latitud del observador en grados (sur negativo)"),
+    lon: float = Query(..., description="Longitud del observador en grados (oeste negativo)"),
+    at: Optional[str] = Query(
+        None,
+        description="Fecha/hora en formato ISO 8601 (UTC). Ej: 2024-01-01T02:30:00Z. Si se omite, se usa la hora actual en UTC.",
+    ),
+) -> List[VisibleBody]:
+    bodies = get_visible_bodies(
+        latitude_deg=lat,
+        longitude_deg=lon,
+        when_iso_utc=at,
+        minimum_altitude_deg=-90.0,
+    )
+    return bodies
 
 if __name__ == "__main__":
     # Ejecución directa: uvicorn con autoreload para desarrollo
