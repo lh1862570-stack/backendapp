@@ -1,13 +1,28 @@
 from typing import List, Optional, Dict
 from fastapi import FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from star_service import get_visible_stars, compute_visible_stars, get_visible_bodies
+from star_service import (
+    get_visible_stars,
+    compute_visible_stars,
+    get_visible_bodies,
+    get_astronomy_events,
+)
 
 
 app = FastAPI(
     title="Visible Stars API",
     description="Backend con FastAPI para calcular posiciones (alt-az) de estrellas visibles desde una ubicación y fecha/hora dadas",
     version="1.0.0",
+)
+
+# CORS (entorno de desarrollo: permitir todo)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -90,13 +105,43 @@ def visible_bodies(
         description="Fecha/hora en formato ISO 8601 (UTC). Ej: 2024-01-01T02:30:00Z. Si se omite, se usa la hora actual en UTC.",
     ),
 ) -> List[VisibleBody]:
-    bodies = get_visible_bodies(
-        latitude_deg=lat,
-        longitude_deg=lon,
-        when_iso_utc=at,
-        minimum_altitude_deg=-90.0,
-    )
-    return bodies
+    try:
+        bodies = get_visible_bodies(
+            latitude_deg=lat,
+            longitude_deg=lon,
+            when_iso_utc=at,
+            minimum_altitude_deg=-90.0,
+        )
+        return bodies
+    except Exception:
+        # Compatibilidad: si no está disponible o falla, devolver lista vacía con 200
+        return []
+
+
+class AstronomyEvent(BaseModel):
+    type: str  # planet_rise | planet_set | moon_phase | solar_eclipse | lunar_eclipse
+    time: str
+    description: str
+
+
+@app.get("/astronomy-events", response_model=List[AstronomyEvent])
+def astronomy_events(
+    lat: float = Query(..., description="Latitud del observador en grados (sur negativo)"),
+    lon: float = Query(..., description="Longitud del observador en grados (oeste negativo)"),
+    start_datetime: str = Query(..., description="Inicio (ISO 8601 UTC, ej: 2025-08-12T00:00:00Z)"),
+    end_datetime: str = Query(..., description="Fin (ISO 8601 UTC, debe ser posterior al inicio)"),
+) -> List[AstronomyEvent]:
+    try:
+        events = get_astronomy_events(
+            latitude_deg=lat,
+            longitude_deg=lon,
+            start_iso_utc=start_datetime,
+            end_iso_utc=end_datetime,
+        )
+        return events
+    except Exception:
+        # Compatibilidad: si no está disponible o falla, devolver lista vacía con 200
+        return []
 
 if __name__ == "__main__":
     # Ejecución directa: uvicorn con autoreload para desarrollo

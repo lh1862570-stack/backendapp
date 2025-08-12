@@ -330,6 +330,132 @@ def get_visible_bodies(
     return results
 
 
+# --------------------------- Eventos astronómicos ----------------------------
+
+def _format_time_iso_z(t) -> str:
+    # t puede ser skyfield Time o datetime
+    if hasattr(t, "utc_strftime"):
+        return t.utc_strftime("%Y-%m-%dT%H:%M:%SZ")
+    if isinstance(t, datetime):
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+        else:
+            t = t.astimezone(timezone.utc)
+        return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+    raise TypeError("Unsupported time type")
+
+
+def _az_to_cardinal8(azimuth_deg: float) -> str:
+    # N, NE, E, SE, S, SW, W, NW
+    dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+    ix = int(((azimuth_deg % 360.0) + 22.5) // 45) % 8
+    return dirs[ix]
+
+
+def get_astronomy_events(
+    *,
+    latitude_deg: float,
+    longitude_deg: float,
+    start_iso_utc: str,
+    end_iso_utc: str,
+) -> List[Dict[str, str]]:
+    """
+    Devuelve eventos astronómicos entre start y end (UTC):
+    - planet_rise / planet_set para planetas principales
+    - moon_phase para las 4 fases principales
+    """
+    t_start = _parse_iso_datetime_utc(start_iso_utc)
+    t_end = _parse_iso_datetime_utc(end_iso_utc)
+    if t_end <= t_start:
+        raise ValueError("end_datetime debe ser posterior a start_datetime")
+
+    ts = load.timescale()
+    t0 = ts.from_datetime(t_start)
+    t1 = ts.from_datetime(t_end)
+
+    eph = _load_ephemeris()
+    topos = wgs84.latlon(latitude_degrees=float(latitude_deg), longitude_degrees=float(longitude_deg))
+
+    events: List[Dict[str, str]] = []
+
+    # 1) Fases de la luna (eventos discretos: nueva, cuarto creciente, llena, cuarto menguante)
+    try:
+        f_moon = almanac.moon_phases(eph)
+        times_moon, phases = almanac.find_discrete(t0, t1, f_moon)
+        phase_names = {
+            0: "Luna nueva",
+            1: "Cuarto creciente",
+            2: "Luna llena",
+            3: "Cuarto menguante",
+        }
+        for ti, ph in zip(times_moon, phases):
+            # Fracción iluminada para enriquecer descripción
+            frac = float(almanac.fraction_illuminated(eph, "moon", ti))
+            pct = int(round(frac * 100))
+            desc = f"{phase_names.get(int(ph), 'Fase lunar')} ({pct}%)"
+            events.append(
+                {
+                    "type": "moon_phase",
+                    "time": _format_time_iso_z(ti),
+                    "description": desc,
+                }
+            )
+    except Exception:
+        # Si falla, no incluimos fases
+        pass
+
+    # 2) Salidas y puestas de planetas principales
+    planets = [
+        ("Mercury", eph["mercury"]),
+        ("Venus", eph["venus"]),
+        ("Mars", eph["mars"]),
+        ("Jupiter", eph["jupiter barycenter"]),
+        ("Saturn", eph["saturn barycenter"]),
+        ("Uranus", eph["uranus barycenter"]),
+        ("Neptune", eph["neptune barycenter"]),
+    ]
+
+    for name, body in planets:
+        try:
+            f_rs = almanac.risings_and_settings(eph, body, topos)
+            times, updown = almanac.find_discrete(t0, t1, f_rs)
+            # Determinar transición respecto al estado inicial
+            state0 = bool(f_rs(t0))  # True si por encima del horizonte al inicio
+            prev = state0
+            for ti, st in zip(times, updown):
+                st_bool = bool(st)
+                # Evento de cambio
+                if not prev and st_bool:
+                    # Rise
+                    alt, az, _ = topos.at(ti).observe(body).apparent().altaz()
+                    dir_label = _az_to_cardinal8(float(az.degrees))
+                    events.append(
+                        {
+                            "type": "planet_rise",
+                            "time": _format_time_iso_z(ti),
+                            "description": f"{name} sale por el {dir_label}",
+                        }
+                    )
+                elif prev and not st_bool:
+                    # Set
+                    alt, az, _ = topos.at(ti).observe(body).apparent().altaz()
+                    dir_label = _az_to_cardinal8(float(az.degrees))
+                    events.append(
+                        {
+                            "type": "planet_set",
+                            "time": _format_time_iso_z(ti),
+                            "description": f"{name} se pone por el {dir_label}",
+                        }
+                    )
+                prev = st_bool
+        except Exception:
+            continue
+
+    # Orden por tiempo
+    events.sort(key=lambda e: e.get("time", ""))
+    return events
+
+
 def get_visible_stars(
     *,
     latitude_deg: float,
