@@ -4,11 +4,71 @@
   { "name": "Arcturus",   "ra": 14.261020, "dec": 19.182414,  "mag": -0.05 },
   { "name": "Vega",       "ra": 18.615649, "dec": 38.783689,  "mag": 0.03 },
   { "name": "Capella",    "ra": 5.278155,  "dec": 45.997991,  "mag": 0.08 },
-  { "name": "Rigel",      "ra": 5.242298,  "dec": -8.201638,  "mag": 0.12 },
+  { "name": "Rigel",      "ra": 5.242298,  "dec": -8.201638,  "mag": 0.12,
+    "aliases": ["beta orionis", "β Ori", "Beta Ori", "Rigel"],
+    "ids": { "hip": 24436 }
+  },
   { "name": "Procyon",    "ra": 7.655033,  "dec": 5.224988,   "mag": 0.38 },
   { "name": "Achernar",   "ra": 1.628568,  "dec": -57.236753, "mag": 0.46 },
-  { "name": "Betelgeuse", "ra": 5.919529,  "dec": 7.407064,   "mag": 0.50 },
-  { "name": "Altair",     "ra": 19.846389, "dec": 8.868321,   "mag": 0.77 }
+  { "name": "Betelgeuse", "ra": 5.919529,  "dec": 7.407064,   "mag": 0.50,
+    "aliases": ["alpha orionis", "α Ori", "Alfa Ori", "Alpha Ori", "Betelgeuse", "HIP 27989"],
+    "ids": { "hip": 27989 }
+  },
+  { "name": "Altair",     "ra": 19.846389, "dec": 8.868321,   "mag": 0.77 },
+
+  { "name": "Alnitak",    "ra": 5.679313,  "dec": -1.942556,  "mag": 1.74,
+    "aliases": ["zeta orionis", "ζ Ori", "Zeta Ori", "Alnitak"]
+  },
+  { "name": "Alnilam",    "ra": 5.603555,  "dec": -1.201917,  "mag": 1.69,
+    "aliases": ["epsilon orionis", "ε Ori", "Epsilon Ori", "Alnilam"]
+  },
+  { "name": "Mintaka",    "ra": 5.533444,  "dec": -0.298889,  "mag": 2.23,
+    "aliases": ["delta orionis", "δ Ori", "Delta Ori", "Mintaka"]
+  },
+  { "name": "Bellatrix",  "ra": 5.418861,  "dec": 6.349702,   "mag": 1.64,
+    "aliases": ["gamma orionis", "γ Ori", "Gamma Ori", "Bellatrix"]
+  },
+  { "name": "Saiph",      "ra": 5.795941,  "dec": -9.669605,  "mag": 2.06,
+    "aliases": ["kappa orionis", "κ Ori", "Kappa Ori", "Saiph"]
+  },
+
+  { "name": "Dubhe",      "ra": 11.062083, "dec": 61.750833,  "mag": 1.79,
+    "aliases": ["alpha ursae majoris", "α UMa", "Alpha UMa", "Dubhe"]
+  },
+  { "name": "Merak",      "ra": 11.030694, "dec": 56.382500,  "mag": 2.37,
+    "aliases": ["beta ursae majoris", "β UMa", "Beta UMa", "Merak"]
+  },
+  { "name": "Phecda",     "ra": 11.897194, "dec": 53.694722,  "mag": 2.44,
+    "aliases": ["gamma ursae majoris", "γ UMa", "Gamma UMa", "Phecda", "Phad"]
+  },
+  { "name": "Megrez",     "ra": 12.257083, "dec": 57.032500,  "mag": 3.31,
+    "aliases": ["delta ursae majoris", "δ UMa", "Delta UMa", "Megrez"]
+  },
+  { "name": "Alioth",     "ra": 12.900472, "dec": 55.959722,  "mag": 1.76,
+    "aliases": ["epsilon ursae majoris", "ε UMa", "Epsilon UMa", "Alioth"]
+  },
+  { "name": "Mizar",      "ra": 13.398889, "dec": 54.925278,  "mag": 2.23,
+    "aliases": ["zeta ursae majoris", "ζ UMa", "Zeta UMa", "Mizar"]
+  },
+  { "name": "Alkaid",     "ra": 13.792333, "dec": 49.313333,  "mag": 1.86,
+    "aliases": ["eta ursae majoris", "η UMa", "Eta UMa", "Alkaid", "Benetnash"]
+  },
+
+  { "name": "Antares",    "ra": 16.490128, "dec": -26.431944, "mag": 1.06,
+    "aliases": ["alpha scorpii", "α Sco", "Alpha Sco", "Antares"]
+  },
+  { "name": "Alniyat",    "ra": 16.353167, "dec": -25.592833, "mag": 2.88,
+    "aliases": ["sigma scorpii", "σ Sco", "Sigma Sco", "Alniyat"]
+  },
+  { "name": "Dschubba",   "ra": 16.005556, "dec": -22.621667, "mag": 2.29,
+    "aliases": ["delta scorpii", "δ Sco", "Delta Sco", "Dschubba"]
+  },
+  { "name": "Shaula",     "ra": 17.560139, "dec": -37.103889, "mag": 1.62,
+    "aliases": ["lambda scorpii", "λ Sco", "Lambda Sco", "Shaula"]
+  },
+  { "name": "Sargas",     "ra": 17.622000, "dec": -42.997800, "mag": 1.86,
+    "aliases": ["theta scorpii", "θ Sco", "Theta Sco", "Sargas"]
+  }
 ]
 
 

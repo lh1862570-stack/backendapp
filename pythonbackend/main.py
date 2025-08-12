@@ -7,6 +7,8 @@ from star_service import (
     compute_visible_stars,
     get_visible_bodies,
     get_astronomy_events,
+    get_visible_stars_batch,
+    get_visible_bodies_batch,
 )
 
 
@@ -140,8 +142,55 @@ def astronomy_events(
         )
         return events
     except Exception:
-        # Compatibilidad: si no está disponible o falla, devolver lista vacía con 200
         return []
+
+
+@app.get("/visible-stars-batch")
+def visible_stars_batch(
+    lat: float = Query(..., description="Latitud del observador en grados (sur negativo)"),
+    lon: float = Query(..., description="Longitud del observador en grados (oeste negativo)"),
+    start: str = Query(..., description="Inicio (ISO 8601 UTC, ej: 2025-08-11T18:00:00Z)"),
+    end: str = Query(..., description="Fin (ISO 8601 UTC, ej: 2025-08-12T06:00:00Z)"),
+    step_hours: float = Query(1.0, description="Paso en horas entre frames"),
+    max_mag: Optional[float] = Query(None, description="Magnitud visual máxima (menor o igual). Ej: 6.0"),
+    limit: Optional[int] = Query(None, description="Límite por frame"),
+):
+    try:
+        frames = get_visible_stars_batch(
+            latitude_deg=lat,
+            longitude_deg=lon,
+            start_iso_utc=start,
+            end_iso_utc=end,
+            step_hours=step_hours,
+            max_magnitude=max_mag,
+            limit=limit,
+        )
+        return {"frames": frames}
+    except Exception:
+        return {"frames": []}
+
+
+@app.get("/visible-bodies-batch")
+def visible_bodies_batch(
+    lat: float = Query(..., description="Latitud del observador en grados (sur negativo)"),
+    lon: float = Query(..., description="Longitud del observador en grados (oeste negativo)"),
+    start: str = Query(..., description="Inicio (ISO 8601 UTC, ej: 2025-08-11T18:00:00Z)"),
+    end: str = Query(..., description="Fin (ISO 8601 UTC, ej: 2025-08-12T06:00:00Z)"),
+    step_hours: float = Query(1.0, description="Paso en horas entre frames"),
+    limit: Optional[int] = Query(None, description="Límite por frame"),
+):
+    try:
+        frames = get_visible_bodies_batch(
+            latitude_deg=lat,
+            longitude_deg=lon,
+            start_iso_utc=start,
+            end_iso_utc=end,
+            step_hours=step_hours,
+            limit=limit,
+        )
+        return {"frames": frames}
+    except Exception:
+        return {"frames": []}
 
 if __name__ == "__main__":
     # Ejecución directa: uvicorn con autoreload para desarrollo

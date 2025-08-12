@@ -4,6 +4,7 @@ import json
 import math
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from datetime import timedelta
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -454,6 +455,78 @@ def get_astronomy_events(
     # Orden por tiempo
     events.sort(key=lambda e: e.get("time", ""))
     return events
+
+
+# ------------------------------- Batch helpers -------------------------------
+
+def _iterate_datetimes_utc(start_dt: datetime, end_dt: datetime, step_hours: float):
+    if step_hours <= 0:
+        raise ValueError("step_hours debe ser > 0")
+    cur = start_dt
+    step = timedelta(hours=step_hours)
+    while cur <= end_dt:
+        yield cur
+        cur = cur + step
+
+
+def get_visible_stars_batch(
+    *,
+    latitude_deg: float,
+    longitude_deg: float,
+    start_iso_utc: str,
+    end_iso_utc: str,
+    step_hours: float = 1.0,
+    max_magnitude: Optional[float] = None,
+    limit: Optional[int] = None,
+) -> List[Dict[str, object]]:
+    start_dt = _parse_iso_datetime_utc(start_iso_utc)
+    end_dt = _parse_iso_datetime_utc(end_iso_utc)
+    if end_dt <= start_dt:
+        return []
+
+    frames: List[Dict[str, object]] = []
+    for dt in _iterate_datetimes_utc(start_dt, end_dt, step_hours):
+        iso = _format_time_iso_z(dt)
+        stars = get_visible_stars(
+            latitude_deg=latitude_deg,
+            longitude_deg=longitude_deg,
+            when_iso_utc=iso,
+            minimum_altitude_deg=-90.0,
+            limit=limit,
+            sort_by_magnitude=True,
+            max_magnitude=max_magnitude,
+        )
+        frames.append({"at": iso, "stars": stars})
+    return frames
+
+
+def get_visible_bodies_batch(
+    *,
+    latitude_deg: float,
+    longitude_deg: float,
+    start_iso_utc: str,
+    end_iso_utc: str,
+    step_hours: float = 1.0,
+    limit: Optional[int] = None,
+) -> List[Dict[str, object]]:
+    start_dt = _parse_iso_datetime_utc(start_iso_utc)
+    end_dt = _parse_iso_datetime_utc(end_iso_utc)
+    if end_dt <= start_dt:
+        return []
+
+    frames: List[Dict[str, object]] = []
+    for dt in _iterate_datetimes_utc(start_dt, end_dt, step_hours):
+        iso = _format_time_iso_z(dt)
+        bodies = get_visible_bodies(
+            latitude_deg=latitude_deg,
+            longitude_deg=longitude_deg,
+            when_iso_utc=iso,
+            minimum_altitude_deg=-90.0,
+        )
+        if limit is not None and limit > 0:
+            bodies = bodies[:limit]
+        frames.append({"at": iso, "bodies": bodies})
+    return frames
 
 
 def get_visible_stars(
