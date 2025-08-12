@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict
 from fastapi import FastAPI, Query
 from pydantic import BaseModel
 from star_service import get_visible_stars, compute_visible_stars
@@ -16,6 +16,12 @@ class VisibleStar(BaseModel):
     magnitude: float
     altitude_deg: float
     azimuth_deg: float
+    distance_ly: Optional[float] = None
+    color_temp_K: Optional[float] = None
+    bv: Optional[float] = None
+    rgb_hex: Optional[str] = None
+    aliases: Optional[List[str]] = None
+    ids: Optional[Dict[str, int]] = None
 
 
 @app.get("/health")
@@ -31,23 +37,21 @@ def visible_stars(
         None,
         description="Fecha/hora en formato ISO 8601 (UTC). Ej: 2024-01-01T02:30:00Z. Si se omite, se usa la hora actual en UTC.",
     ),
-    min_alt: float = Query(
-        0.0, description="Altitud mínima (grados) para considerar una estrella visible (horizonte=0)"
-    ),
     limit: Optional[int] = Query(
         None, description="Limitar el número de resultados. Si se omite, devuelve todas las visibles."
     ),
-    sort_by_magnitude: bool = Query(
-        True, description="Ordenar por magnitud (más brillante primero). Si False, ordena por altitud."
+    max_mag: Optional[float] = Query(
+        None, description="Magnitud visual máxima (menor o igual). Ej: 6.0"
     ),
 ) -> List[VisibleStar]:
     stars = get_visible_stars(
         latitude_deg=lat,
         longitude_deg=lon,
         when_iso_utc=at,
-        minimum_altitude_deg=min_alt,
+        minimum_altitude_deg=-90.0,
         limit=limit,
-        sort_by_magnitude=sort_by_magnitude,
+        sort_by_magnitude=True,
+        max_magnitude=max_mag,
     )
     # FastAPI/Pydantic realizará la conversión a VisibleStar automáticamente
     return stars

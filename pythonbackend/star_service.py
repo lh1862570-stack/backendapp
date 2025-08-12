@@ -18,6 +18,13 @@ class CatalogStar:
     ra_hours: float  # Ascensión recta en horas
     dec_deg: float   # Declinación en grados
     magnitude: float
+    # Campos opcionales enriquecidos (si existen en el catálogo)
+    distance_ly: Optional[float] = None
+    color_temp_K: Optional[float] = None
+    bv: Optional[float] = None
+    rgb_hex: Optional[str] = None
+    aliases: Optional[List[str]] = None
+    ids: Optional[Dict[str, int]] = None
 
 
 def _module_dir() -> Path:
@@ -49,6 +56,12 @@ def load_star_catalog() -> List[CatalogStar]:
                 ra_hours=float(ra_value),
                 dec_deg=float(dec_value),
                 magnitude=float(mag_value),
+                distance_ly=(float(item["distance_ly"]) if "distance_ly" in item and item["distance_ly"] is not None else None),
+                color_temp_K=(float(item["color_temp_K"]) if "color_temp_K" in item and item["color_temp_K"] is not None else None),
+                bv=(float(item["bv"]) if "bv" in item and item["bv"] is not None else None),
+                rgb_hex=(str(item["rgb_hex"]) if "rgb_hex" in item and item["rgb_hex"] is not None else None),
+                aliases=(list(item["aliases"]) if "aliases" in item and item["aliases"] is not None else None),
+                ids=(dict(item["ids"]) if "ids" in item and item["ids"] is not None else None),
             )
         )
     return stars
@@ -164,9 +177,10 @@ def get_visible_stars(
     latitude_deg: float,
     longitude_deg: float,
     when_iso_utc: Optional[str] = None,
-    minimum_altitude_deg: float = 0.0,
+    minimum_altitude_deg: float = -90.0,
     limit: Optional[int] = None,
     sort_by_magnitude: bool = True,
+    max_magnitude: Optional[float] = None,
 ) -> List[Dict[str, float]]:
     """
     Calcula estrellas visibles y devuelve una lista de dicts con name, magnitude, altitude_deg, azimuth_deg.
@@ -189,16 +203,35 @@ def get_visible_stars(
             latitude_deg=latitude_deg,
             lst_hours=lst_h,
         )
+        # No filtrar por altitud por defecto (minimum_altitude_deg=-90)
         if horiz["altitude_deg"] >= minimum_altitude_deg:
-            results.append(
-                {
-                    "name": star.name,
-                    "magnitude": star.magnitude,
-                    "altitude_deg": horiz["altitude_deg"],
-                    "azimuth_deg": horiz["azimuth_deg"],
-                }
-            )
+            result_item: Dict[str, float] = {
+                "name": star.name,
+                "magnitude": star.magnitude,
+                "altitude_deg": horiz["altitude_deg"],
+                "azimuth_deg": horiz["azimuth_deg"],
+            }
+            # Campos opcionales si existen
+            if star.distance_ly is not None:
+                result_item["distance_ly"] = star.distance_ly
+            if star.color_temp_K is not None:
+                result_item["color_temp_K"] = star.color_temp_K
+            if star.bv is not None:
+                result_item["bv"] = star.bv
+            if star.rgb_hex is not None:
+                result_item["rgb_hex"] = star.rgb_hex
+            if star.aliases is not None:
+                result_item["aliases"] = star.aliases
+            if star.ids is not None:
+                result_item["ids"] = star.ids
 
+            results.append(result_item)
+
+    # Filtrar por magnitud máxima si se solicita
+    if max_magnitude is not None:
+        results = [r for r in results if r["magnitude"] <= max_magnitude]
+
+    # Ordenar por magnitud (más brillante primero) por defecto
     if sort_by_magnitude:
         results.sort(key=lambda x: x["magnitude"])  # menor magnitud = más brillante
     else:
@@ -235,15 +268,28 @@ def compute_visible_stars(lat: float, lon: float, date_iso: Optional[str]) -> Li
         astrometric = observer.at(t).observe(sf_star).apparent()
         alt, az, _distance = astrometric.altaz()
         alt_deg = float(alt.degrees)
-        if alt_deg > 0.0:
-            visible.append(
-                {
-                    "name": star.name,
-                    "magnitude": star.magnitude,
-                    "altitude_deg": alt_deg,
-                    "azimuth_deg": float(az.degrees) % 360.0,
-                }
-            )
+        # No filtrar por altitud aquí; el cliente decide si mostrar > 0°
+        item: Dict[str, float] = {
+            "name": star.name,
+            "magnitude": star.magnitude,
+            "altitude_deg": alt_deg,
+            "azimuth_deg": float(az.degrees) % 360.0,
+        }
+        # Campos opcionales si existen
+        if star.distance_ly is not None:
+            item["distance_ly"] = star.distance_ly
+        if star.color_temp_K is not None:
+            item["color_temp_K"] = star.color_temp_K
+        if star.bv is not None:
+            item["bv"] = star.bv
+        if star.rgb_hex is not None:
+            item["rgb_hex"] = star.rgb_hex
+        if star.aliases is not None:
+            item["aliases"] = star.aliases
+        if star.ids is not None:
+            item["ids"] = star.ids
+
+        visible.append(item)
 
     return visible
 
