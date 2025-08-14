@@ -9,6 +9,8 @@ from star_service import (
     get_astronomy_events,
     get_visible_stars_batch,
     get_visible_bodies_batch,
+    get_constellation_frame,
+    get_circumpolar_constellations,
 )
 
 
@@ -191,6 +193,30 @@ def visible_bodies_batch(
         return {"frames": frames}
     except Exception:
         return {"frames": []}
+
+
+@app.get("/constellations")
+def list_constellations_api():
+    return {"constellations": get_circumpolar_constellations()}
+
+
+@app.get("/constellation-frame")
+def constellation_frame(
+    name: str = Query(..., description="Nombre de la constelación (ej.: 'Ursa Minor', 'Cassiopeia')"),
+    lat: float = Query(..., description="Latitud del observador"),
+    lon: float = Query(..., description="Longitud del observador"),
+    at: Optional[str] = Query(None, description="Fecha/hora ISO 8601 UTC (Z)"),
+):
+    try:
+        frame = get_constellation_frame(
+            constellation_name=name,
+            latitude_deg=lat,
+            longitude_deg=lon,
+            when_iso_utc=at,
+        )
+        return frame
+    except Exception as e:
+        return {"name": name, "stars": [], "edges": [], "error": str(e)}
 
 if __name__ == "__main__":
     # Ejecución directa: uvicorn con autoreload para desarrollo

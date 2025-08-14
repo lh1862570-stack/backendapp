@@ -68,6 +68,85 @@
   },
   { "name": "Sargas",     "ra": 17.622000, "dec": -42.997800, "mag": 1.86,
     "aliases": ["theta scorpii", "θ Sco", "Theta Sco", "Sargas"]
+  },
+
+  { "name": "Polaris",     "ra": 2.530300,  "dec": 89.264200,  "mag": 1.98,
+    "aliases": ["alpha ursae minoris", "α UMi", "Alpha UMi", "Polaris", "North Star"]
+  },
+  { "name": "Kochab",      "ra": 14.845000, "dec": 74.155600,  "mag": 2.08,
+    "aliases": ["beta ursae minoris", "β UMi", "Beta UMi", "Kochab"]
+  },
+  { "name": "Pherkad",     "ra": 15.345600, "dec": 71.823900,  "mag": 3.00,
+    "aliases": ["gamma ursae minoris", "γ UMi", "Gamma UMi", "Pherkad"]
+  },
+  { "name": "Yildun",      "ra": 17.536900, "dec": 86.586100,  "mag": 4.35,
+    "aliases": ["delta ursae minoris", "δ UMi", "Delta UMi", "Yildun"]
+  },
+  { "name": "Epsilon UMi", "ra": 16.766100, "dec": 82.037200,  "mag": 4.19,
+    "aliases": ["epsilon ursae minoris", "ε UMi"]
+  },
+  { "name": "Zeta UMi",    "ra": 15.734400, "dec": 77.795000,  "mag": 4.30,
+    "aliases": ["zeta ursae minoris", "ζ UMi"]
+  },
+
+  
+  { "name": "Thuban",      "ra": 14.073100, "dec": 64.375800,  "mag": 3.65,
+    "aliases": ["alpha draconis", "α Dra"]
+  },
+  { "name": "Rastaban",    "ra": 17.506900, "dec": 52.301400,  "mag": 2.79,
+    "aliases": ["beta draconis", "β Dra"]
+  },
+  { "name": "Eltanin",     "ra": 17.943300, "dec": 51.488900,  "mag": 2.24,
+    "aliases": ["gamma draconis", "γ Dra"]
+  },
+  { "name": "Grumium",     "ra": 17.892000, "dec": 56.871900,  "mag": 3.75,
+    "aliases": ["xi draconis", "ξ Dra"]
+  },
+  { "name": "Edasich",     "ra": 15.415600, "dec": 58.966100,  "mag": 3.29,
+    "aliases": ["iota draconis", "ι Dra"]
+  },
+  { "name": "Aldhibah",    "ra": 17.146400, "dec": 65.714700,  "mag": 3.17,
+    "aliases": ["zeta draconis", "ζ Dra"]
+  },
+  { "name": "Kuma",        "ra": 17.536700, "dec": 55.183300,  "mag": 4.88,
+    "aliases": ["nu draconis", "ν Dra"]
+  },
+  { "name": "Gianfar",     "ra": 11.523300, "dec": 69.331100,  "mag": 3.85,
+    "aliases": ["lambda draconis", "λ Dra"]
+  },
+
+  
+  { "name": "Alderamin",   "ra": 21.309400, "dec": 62.585600,  "mag": 2.45,
+    "aliases": ["alpha cephei", "α Cep"]
+  },
+  { "name": "Alfirk",      "ra": 21.477800, "dec": 70.560800,  "mag": 3.23,
+    "aliases": ["beta cephei", "β Cep"]
+  },
+  { "name": "Delta Cephei", "ra": 22.486100, "dec": 58.415300, "mag": 3.75,
+    "aliases": ["δ Cephei"]
+  },
+  { "name": "Zeta Cephei", "ra": 22.181100, "dec": 58.201100,  "mag": 3.40,
+    "aliases": ["ζ Cephei"]
+  },
+  { "name": "Errai",       "ra": 23.655600, "dec": 77.632200,  "mag": 3.21,
+    "aliases": ["gamma cephei", "γ Cep", "Errai"]
+  },
+
+  
+  { "name": "Schedar",     "ra": 0.675000,  "dec": 56.537200,  "mag": 2.24,
+    "aliases": ["alpha cassiopeiae", "α Cas"]
+  },
+  { "name": "Caph",        "ra": 0.152800,  "dec": 59.149700,  "mag": 2.28,
+    "aliases": ["beta cassiopeiae", "β Cas"]
+  },
+  { "name": "Gamma Cassiopeiae", "ra": 0.945000,  "dec": 60.716700,  "mag": 2.50,
+    "aliases": ["γ Cas"]
+  },
+  { "name": "Ruchbah",     "ra": 1.430300,  "dec": 60.235300,  "mag": 2.68,
+    "aliases": ["delta cassiopeiae", "δ Cas"]
+  },
+  { "name": "Segin",       "ra": 1.906700,  "dec": 63.670000,  "mag": 3.38,
+    "aliases": ["epsilon cassiopeiae", "ε Cas"]
   }
 ]
 

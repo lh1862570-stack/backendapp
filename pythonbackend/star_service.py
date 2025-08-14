@@ -12,6 +12,7 @@ from typing import Dict, List, Optional
 # Skyfield para cálculos astronómicos de alta precisión
 from skyfield.api import Star, load, wgs84
 from skyfield import almanac
+from constellations import get_constellation_definition, list_constellations
 
 
 @dataclass
@@ -649,4 +650,68 @@ def compute_visible_stars(lat: float, lon: float, date_iso: Optional[str]) -> Li
         visible.append(item)
 
     return visible
+
+
+# --------------------------- Constellation helpers ----------------------------
+
+def get_constellation_frame(
+    *,
+    constellation_name: str,
+    latitude_deg: float,
+    longitude_deg: float,
+    when_iso_utc: Optional[str] = None,
+) -> Dict[str, object]:
+    """
+    Devuelve las posiciones de las estrellas principales de una constelación y
+    las aristas para dibujarla.
+
+    Respuesta:
+    {
+      "name": str,
+      "at": ISO_UTC,
+      "stars": [{ name, magnitude, altitude_deg, azimuth_deg }],
+      "edges": [[fromName, toName], ...]
+    }
+    """
+    dt = _parse_iso_datetime_utc(when_iso_utc)
+    ts = load.timescale()
+    t = ts.from_datetime(dt)
+
+    definition = get_constellation_definition(constellation_name)
+    star_names: List[str] = definition["stars"]  # type: ignore[index]
+    edges: List[List[str]] = definition["edges"]  # type: ignore[index]
+
+    observer = wgs84.latlon(latitude_degrees=float(latitude_deg), longitude_degrees=float(longitude_deg))
+
+    # Index catálogo por nombre para acceso rápido
+    catalog_index: Dict[str, CatalogStar] = {s.name: s for s in load_star_catalog()}
+
+    positioned: List[Dict[str, float]] = []
+    for name in star_names:
+        cat_star = catalog_index.get(name)
+        if not cat_star:
+            # Si una estrella no existe en el catálogo, se omite
+            continue
+        sf_star = Star(ra_hours=cat_star.ra_hours, dec_degrees=cat_star.dec_deg)
+        alt, az, _ = observer.at(t).observe(sf_star).apparent().altaz()
+        positioned.append(
+            {
+                "name": name,
+                "magnitude": cat_star.magnitude,
+                "altitude_deg": float(alt.degrees),
+                "azimuth_deg": float(az.degrees) % 360.0,
+            }
+        )
+
+    return {
+        "name": constellation_name,
+        "at": _format_time_iso_z(dt),
+        "stars": positioned,
+        "edges": edges,
+    }
+
+
+def get_circumpolar_constellations() -> List[str]:
+    """Devuelve la lista de constelaciones circumpolares configuradas."""
+    return list_constellations()
 
