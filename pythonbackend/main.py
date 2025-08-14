@@ -15,6 +15,7 @@ from star_service import (
     get_all_constellations_frames,
     get_visible_constellations_summary,
     project_constellations_to_screen,
+    get_labels_for_screen,
 )
 
 
@@ -280,6 +281,48 @@ def constellations_screen(
         roll_deg=roll_deg,
     )
     return {"at": at or "now", "frames": frames}
+
+
+@app.get("/constellations-labels")
+def constellations_labels(
+    lat: float = Query(..., description="Latitud"),
+    lon: float = Query(..., description="Longitud"),
+    at: Optional[str] = Query(None, description="Fecha/hora ISO 8601 UTC (Z)"),
+    min_alt: float = Query(0.0, description="Altitud mínima"),
+    names: Optional[str] = Query(None, description="Lista separada por comas"),
+    include_below_horizon: bool = Query(False, description="Incluir bajo el horizonte"),
+    fov_center_az_deg: float = Query(..., description="FOV centro az (deg)"),
+    fov_center_alt_deg: float = Query(..., description="FOV centro alt (deg)"),
+    fov_h_deg: float = Query(..., description="FOV ancho (deg)"),
+    fov_v_deg: float = Query(..., description="FOV alto (deg)"),
+    width_px: int = Query(..., description="Ancho pantalla px"),
+    height_px: int = Query(..., description="Alto pantalla px"),
+    heading_offset_deg: float = Query(0.0, description="Corrección de brújula (deg)"),
+    roll_deg: float = Query(0.0, description="Rotación de pantalla (roll, deg)"),
+    max_labels: int = Query(20, description="Cantidad máxima de labels"),
+    max_mag: float = Query(4.0, description="Magnitud máxima para etiquetar"),
+    min_separation_px: float = Query(24.0, description="Separación mínima entre labels (px)"),
+):
+    labels = get_labels_for_screen(
+        latitude_deg=lat,
+        longitude_deg=lon,
+        when_iso_utc=at,
+        minimum_altitude_deg=min_alt,
+        names=[s.strip() for s in names.split(",") if s.strip()] if names else None,
+        include_below_horizon=include_below_horizon,
+        fov_center_az_deg=fov_center_az_deg,
+        fov_center_alt_deg=fov_center_alt_deg,
+        fov_h_deg=fov_h_deg,
+        fov_v_deg=fov_v_deg,
+        width_px=width_px,
+        height_px=height_px,
+        heading_offset_deg=heading_offset_deg,
+        roll_deg=roll_deg,
+        max_labels=max_labels,
+        max_mag=max_mag,
+        min_separation_px=min_separation_px,
+    )
+    return {"at": at or "now", "labels": labels}
 
 
 @app.get("/visible-bodies-batch")

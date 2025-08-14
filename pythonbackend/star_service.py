@@ -1017,3 +1017,93 @@ def project_constellations_to_screen(
 
     return projected
 
+
+def _euclid_dist2(ax: float, ay: float, bx: float, by: float) -> float:
+    dx = ax - bx
+    dy = ay - by
+    return dx * dx + dy * dy
+
+
+def get_labels_for_screen(
+    *,
+    latitude_deg: float,
+    longitude_deg: float,
+    when_iso_utc: Optional[str],
+    minimum_altitude_deg: float,
+    names: Optional[List[str]],
+    include_below_horizon: bool,
+    fov_center_az_deg: float,
+    fov_center_alt_deg: float,
+    fov_h_deg: float,
+    fov_v_deg: float,
+    width_px: int,
+    height_px: int,
+    heading_offset_deg: float = 0.0,
+    roll_deg: float = 0.0,
+    max_labels: int = 20,
+    max_mag: float = 4.0,
+    min_separation_px: float = 24.0,
+) -> List[Dict[str, object]]:
+    """Selecciona estrellas brillantes para etiquetar, evitando solapamientos.
+
+    Retorna lista de items: { name, magnitude, x_px, y_px, azimuth_deg, altitude_deg, constellation }
+    """
+    frames = project_constellations_to_screen(
+        latitude_deg=latitude_deg,
+        longitude_deg=longitude_deg,
+        when_iso_utc=when_iso_utc,
+        minimum_altitude_deg=minimum_altitude_deg,
+        names=names,
+        include_below_horizon=include_below_horizon,
+        fov_center_az_deg=fov_center_az_deg,
+        fov_center_alt_deg=fov_center_alt_deg,
+        fov_h_deg=fov_h_deg,
+        fov_v_deg=fov_v_deg,
+        width_px=width_px,
+        height_px=height_px,
+        include_offscreen=False,
+        clip_edges_to_fov=True,
+        heading_offset_deg=heading_offset_deg,
+        roll_deg=roll_deg,
+    )
+
+    candidates: List[Dict[str, object]] = []
+    for f in frames:
+        const_name = str(f.get("name", ""))
+        for s in f.get("screen_stars", []) or []:
+            try:
+                mag = float(s.get("magnitude"))
+            except Exception:
+                mag = 10.0
+            if mag > max_mag:
+                continue
+            candidates.append(
+                {
+                    "name": s.get("name"),
+                    "magnitude": mag,
+                    "x_px": float(s.get("x_px", 0.0)),
+                    "y_px": float(s.get("y_px", 0.0)),
+                    "azimuth_deg": float(s.get("azimuth_deg", 0.0)),
+                    "altitude_deg": float(s.get("altitude_deg", -90.0)),
+                    "constellation": const_name,
+                }
+            )
+
+    # Ordenar por brillo (mag ascendente)
+    candidates.sort(key=lambda it: it.get("magnitude", 99.0))
+
+    selected: List[Dict[str, object]] = []
+    min_sep2 = float(min_separation_px) * float(min_separation_px)
+    for c in candidates:
+        if len(selected) >= max_labels:
+            break
+        ok = True
+        for s in selected:
+            if _euclid_dist2(float(c["x_px"]), float(c["y_px"]), float(s["x_px"]), float(s["y_px"])) < min_sep2:
+                ok = False
+                break
+        if ok:
+            selected.append(c)
+
+    return selected
+
