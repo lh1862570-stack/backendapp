@@ -51,6 +51,26 @@ Esta guía resume todo lo necesario para consumir el backend desde Flutter (Andr
 - **Query**: `lat` (req), `lon` (req), `start` (req ISO), `end` (req ISO), `step_hours` (opt float, def 1.0), `limit` (opt)
 - **Respuesta**: `{ "frames": [ { "at": ISO, "bodies": VisibleBody[] } ] }`
 
+#### 7) GET `/constellation-frame`
+- **Query**: `name` (req), `lat` (req), `lon` (req), `at` (opt ISO), `min_alt` (opt, def 0)
+- **Respuesta**: `{ name, at, below_horizon, center?, stars[], edges[] }`
+
+#### 8) GET `/constellations-frames`
+- **Query**: `lat` (req), `lon` (req), `at` (opt ISO),
+  `names` (opt lista separada por comas), `min_alt` (opt),
+  `include_below_horizon` (opt bool), `fov_center_az_deg`, `fov_center_alt_deg`, `fov_h_deg`, `fov_v_deg` (opcionales para filtrar al FOV), `clip_edges_to_fov` (opt bool)
+- **Respuesta**: `{ at, frames: [ { name, below_horizon, center?, stars[], edges[] } ] }`
+
+#### 9) GET `/constellations-visible`
+- Igual que `/constellations-frames` pero devuelve solo `{ name, center?, below_horizon }` por constelación.
+
+#### 10) GET `/constellations-screen`
+- Proyecta a coordenadas de pantalla usando FOV y resolución.
+- **Query**: `lat`, `lon`, `at?`, `min_alt?`, `names?`, `include_below_horizon?`,
+  `fov_center_az_deg` (req), `fov_center_alt_deg` (req), `fov_h_deg` (req), `fov_v_deg` (req),
+  `width_px` (req), `height_px` (req), `include_offscreen?`, `clip_edges_to_fov?`
+- **Respuesta**: `{ at, frames: [ { name, below_horizon, center?, screen_stars: [{ name, magnitude, azimuth_deg, altitude_deg, x_px, y_px }], screen_edges: [[x1,y1,x2,y2]], ... } ] }`
+
 ### Ejemplos rápidos (cURL)
 ```bash
 curl "https://tu-servicio.onrender.com/health"
@@ -101,6 +121,64 @@ Future<List<Map<String, dynamic>>> fetchVisibleStars({
     throw Exception('HTTP ${res.statusCode}: ${res.body}');
   }
   return (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();
+}
+```
+
+#### Ejemplo: consumir `/constellations-screen` y dibujar
+```dart
+class ScreenStar {
+  final String name; final double x, y; final double mag;
+  ScreenStar({required this.name, required this.x, required this.y, required this.mag});
+  factory ScreenStar.fromJson(Map<String, dynamic> j) => ScreenStar(
+    name: j['name'], x: (j['x_px'] as num).toDouble(), y: (j['y_px'] as num).toDouble(), mag: (j['magnitude'] as num).toDouble(),
+  );
+}
+
+class ScreenFrame {
+  final String name; final List<ScreenStar> stars; final List<List<double>> edges;
+  ScreenFrame({required this.name, required this.stars, required this.edges});
+  factory ScreenFrame.fromJson(Map<String, dynamic> j) => ScreenFrame(
+    name: j['name'],
+    stars: (j['screen_stars'] as List).map((e) => ScreenStar.fromJson(e)).toList(),
+    edges: (j['screen_edges'] as List).map((e) => (e as List).map((n) => (n as num).toDouble()).toList()).toList(),
+  );
+}
+
+Future<List<ScreenFrame>> fetchConstellationsScreen({
+  required double lat, required double lon,
+  required double fovAz, required double fovAlt,
+  required double fovH, required double fovV,
+  required int width, required int height,
+  double minAlt = 0.0,
+}) async {
+  final uri = Uri.parse('$baseUrl/constellations-screen').replace(queryParameters: {
+    'lat': '$lat', 'lon': '$lon', 'min_alt': '$minAlt',
+    'fov_center_az_deg': '$fovAz', 'fov_center_alt_deg': '$fovAlt',
+    'fov_h_deg': '$fovH', 'fov_v_deg': '$fovV',
+    'width_px': '$width', 'height_px': '$height',
+    'clip_edges_to_fov': 'true',
+  });
+  final res = await http.get(uri);
+  if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}: ${res.body}');
+  final List frames = (jsonDecode(res.body) as Map<String, dynamic>)['frames'];
+  return frames.map((e) => ScreenFrame.fromJson(e)).toList();
+}
+
+class ScreenPainter extends CustomPainter {
+  final List<ScreenFrame> frames;
+  ScreenPainter(this.frames);
+  @override
+  void paint(Canvas c, Size s) {
+    for (final f in frames) {
+      final line = Paint()..color = Colors.blueAccent..strokeWidth = 2;
+      for (final e in f.edges) {
+        if (e.length != 4) continue; c.drawLine(Offset(e[0], e[1]), Offset(e[2], e[3]), line);
+      }
+      final star = Paint()..color = Colors.white;
+      for (final st in f.stars) { c.drawCircle(Offset(st.x, st.y), (3 + (2.5 - st.mag).clamp(0, 3)).toDouble(), star); }
+    }
+  }
+  @override bool shouldRepaint(covariant ScreenPainter old) => old.frames != frames;
 }
 ```
 

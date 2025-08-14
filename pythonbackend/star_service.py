@@ -86,6 +86,26 @@ def _rad_to_deg(rad: float) -> float:
     return math.degrees(rad)
 
 
+def _wrap_delta_az_deg(a_deg: float, b_deg: float) -> float:
+    """Devuelve (a-b) envuelto a [-180, 180]."""
+    d = (a_deg - b_deg + 180.0) % 360.0 - 180.0
+    return d
+
+
+def _is_inside_fov(
+    *,
+    az_deg: float,
+    alt_deg: float,
+    fov_center_az_deg: float,
+    fov_center_alt_deg: float,
+    fov_h_deg: float,
+    fov_v_deg: float,
+) -> bool:
+    dx = abs(_wrap_delta_az_deg(az_deg, fov_center_az_deg))
+    dy = abs(alt_deg - fov_center_alt_deg)
+    return dx <= (fov_h_deg / 2.0) and dy <= (fov_v_deg / 2.0)
+
+
 def _julian_date(dt: datetime) -> float:
     # Conversión a UTC consciente de zona horaria
     if dt.tzinfo is None:
@@ -660,6 +680,7 @@ def get_constellation_frame(
     latitude_deg: float,
     longitude_deg: float,
     when_iso_utc: Optional[str] = None,
+    minimum_altitude_deg: float = 0.0,
 ) -> Dict[str, object]:
     """
     Devuelve las posiciones de las estrellas principales de una constelación y
@@ -694,24 +715,305 @@ def get_constellation_frame(
             continue
         sf_star = Star(ra_hours=cat_star.ra_hours, dec_degrees=cat_star.dec_deg)
         alt, az, _ = observer.at(t).observe(sf_star).apparent().altaz()
-        positioned.append(
-            {
-                "name": name,
-                "magnitude": cat_star.magnitude,
-                "altitude_deg": float(alt.degrees),
-                "azimuth_deg": float(az.degrees) % 360.0,
-            }
-        )
+        alt_deg = float(alt.degrees)
+        if alt_deg >= minimum_altitude_deg:
+            positioned.append(
+                {
+                    "name": name,
+                    "magnitude": cat_star.magnitude,
+                    "altitude_deg": alt_deg,
+                    "azimuth_deg": float(az.degrees) % 360.0,
+                }
+            )
+    below = len(positioned) == 0
 
-    return {
+    # Centro ponderado por brillo (peso = 1/(mag+eps), eps evita div 0 y signos)
+    center: Optional[Dict[str, float]] = None
+    if not below:
+        eps = 1e-3
+        # Altitud: promedio ponderado directo
+        wsum = 0.0
+        alt_acc = 0.0
+        # Azimut: promedio circular ponderado
+        x_acc = 0.0
+        y_acc = 0.0
+        for p in positioned:
+            mag = float(p.get("magnitude", 0.0))
+            w = 1.0 / max(eps, mag + eps)
+            wsum += w
+            alt_acc += w * float(p["altitude_deg"]) 
+            az_rad = math.radians(float(p["azimuth_deg"]) % 360.0)
+            x_acc += w * math.cos(az_rad)
+            y_acc += w * math.sin(az_rad)
+        if wsum > 0:
+            alt_c = alt_acc / wsum
+            az_c = math.degrees(math.atan2(y_acc, x_acc)) % 360.0
+            center = {"altitude_deg": float(alt_c), "azimuth_deg": float(az_c)}
+
+    out: Dict[str, object] = {
         "name": constellation_name,
         "at": _format_time_iso_z(dt),
-        "stars": positioned,
+        "below_horizon": below,
+        "stars": positioned if not below else [],
         "edges": edges,
     }
+    if center is not None:
+        out["center"] = center
+    return out
 
 
 def get_circumpolar_constellations() -> List[str]:
     """Devuelve la lista de constelaciones circumpolares configuradas."""
     return list_constellations()
+
+
+def get_all_constellations_frames(
+    *,
+    latitude_deg: float,
+    longitude_deg: float,
+    when_iso_utc: Optional[str] = None,
+    minimum_altitude_deg: float = 0.0,
+    names: Optional[List[str]] = None,
+    include_below_horizon: bool = False,
+    fov_center_az_deg: Optional[float] = None,
+    fov_center_alt_deg: Optional[float] = None,
+    fov_h_deg: Optional[float] = None,
+    fov_v_deg: Optional[float] = None,
+    clip_edges_to_fov: bool = False,
+) -> List[Dict[str, object]]:
+    all_names = names if names else list_constellations()
+    frames_raw: List[Dict[str, object]] = []
+    for cname in all_names:
+        try:
+            frame = get_constellation_frame(
+                constellation_name=cname,
+                latitude_deg=latitude_deg,
+                longitude_deg=longitude_deg,
+                when_iso_utc=when_iso_utc,
+                minimum_altitude_deg=minimum_altitude_deg,
+            )
+        except Exception:
+            continue
+        if not include_below_horizon and bool(frame.get("below_horizon", False)):
+            continue
+        frames_raw.append(frame)
+
+    # Opcional: filtro por FOV en base al centro
+    def inside_fov(frame: Dict[str, object]) -> bool:
+        if fov_center_az_deg is None or fov_center_alt_deg is None or fov_h_deg is None or fov_v_deg is None:
+            return True
+        center = frame.get("center")
+        if not isinstance(center, dict):
+            return False
+        az = float(center.get("azimuth_deg", 0.0))
+        alt = float(center.get("altitude_deg", -90.0))
+        return _is_inside_fov(
+            az_deg=az,
+            alt_deg=alt,
+            fov_center_az_deg=float(fov_center_az_deg),
+            fov_center_alt_deg=float(fov_center_alt_deg),
+            fov_h_deg=float(fov_h_deg),
+            fov_v_deg=float(fov_v_deg),
+        )
+
+    filtered = [f for f in frames_raw if inside_fov(f)]
+
+    # Orden por cercanía al centro del FOV si se proporcionó
+    if fov_center_az_deg is not None and fov_center_alt_deg is not None:
+        def dist_key(frame: Dict[str, object]) -> float:
+            center = frame.get("center")
+            if not isinstance(center, dict):
+                return 1e9
+            az = float(center.get("azimuth_deg", 0.0))
+            alt = float(center.get("altitude_deg", -90.0))
+            dx = _wrap_delta_az_deg(az, float(fov_center_az_deg))
+            dy = alt - float(fov_center_alt_deg)
+            return (dx * dx + dy * dy) ** 0.5
+        filtered.sort(key=dist_key)
+
+    # Optional: clip edges to FOV using star positions
+    if clip_edges_to_fov and fov_center_az_deg is not None and fov_center_alt_deg is not None and fov_h_deg is not None and fov_v_deg is not None:
+        clipped_frames: List[Dict[str, object]] = []
+        for frame in filtered:
+            stars = frame.get("stars")
+            edges = frame.get("edges")
+            if not isinstance(stars, list) or not isinstance(edges, list):
+                clipped_frames.append(frame)
+                continue
+            pos_by_name = {s.get("name"): (float(s.get("azimuth_deg", 0.0)), float(s.get("altitude_deg", -90.0))) for s in stars if isinstance(s, dict)}
+            new_edges: List[List[str]] = []
+            for e in edges:
+                if not isinstance(e, list) or len(e) != 2:
+                    continue
+                a, b = e[0], e[1]
+                if a not in pos_by_name or b not in pos_by_name:
+                    continue
+                az_a, alt_a = pos_by_name[a]
+                az_b, alt_b = pos_by_name[b]
+                inside_a = _is_inside_fov(
+                    az_deg=az_a, alt_deg=alt_a,
+                    fov_center_az_deg=float(fov_center_az_deg),
+                    fov_center_alt_deg=float(fov_center_alt_deg),
+                    fov_h_deg=float(fov_h_deg), fov_v_deg=float(fov_v_deg))
+                inside_b = _is_inside_fov(
+                    az_deg=az_b, alt_deg=alt_b,
+                    fov_center_az_deg=float(fov_center_az_deg),
+                    fov_center_alt_deg=float(fov_center_alt_deg),
+                    fov_h_deg=float(fov_h_deg), fov_v_deg=float(fov_v_deg))
+                if inside_a and inside_b:
+                    new_edges.append([a, b])
+            new_frame = dict(frame)
+            new_frame["edges"] = new_edges
+            clipped_frames.append(new_frame)
+        return clipped_frames
+
+    return filtered
+
+
+def get_visible_constellations_summary(
+    *,
+    latitude_deg: float,
+    longitude_deg: float,
+    when_iso_utc: Optional[str] = None,
+    minimum_altitude_deg: float = 0.0,
+    names: Optional[List[str]] = None,
+    include_below_horizon: bool = False,
+    fov_center_az_deg: Optional[float] = None,
+    fov_center_alt_deg: Optional[float] = None,
+    fov_h_deg: Optional[float] = None,
+    fov_v_deg: Optional[float] = None,
+) -> List[Dict[str, object]]:
+    frames = get_all_constellations_frames(
+        latitude_deg=latitude_deg,
+        longitude_deg=longitude_deg,
+        when_iso_utc=when_iso_utc,
+        minimum_altitude_deg=minimum_altitude_deg,
+        names=names,
+        include_below_horizon=include_below_horizon,
+        fov_center_az_deg=fov_center_az_deg,
+        fov_center_alt_deg=fov_center_alt_deg,
+        fov_h_deg=fov_h_deg,
+        fov_v_deg=fov_v_deg,
+    )
+    summary: List[Dict[str, object]] = []
+    for f in frames:
+        item: Dict[str, object] = {
+            "name": f.get("name"),
+            "below_horizon": f.get("below_horizon", False),
+        }
+        if "center" in f and isinstance(f["center"], dict):
+            item["center"] = f["center"]
+        summary.append(item)
+    return summary
+
+
+# --------------------- Screen projection helpers (FOV-based) ------------------
+
+def project_constellations_to_screen(
+    *,
+    latitude_deg: float,
+    longitude_deg: float,
+    when_iso_utc: Optional[str],
+    minimum_altitude_deg: float,
+    names: Optional[List[str]],
+    include_below_horizon: bool,
+    fov_center_az_deg: float,
+    fov_center_alt_deg: float,
+    fov_h_deg: float,
+    fov_v_deg: float,
+    width_px: int,
+    height_px: int,
+    include_offscreen: bool = False,
+    clip_edges_to_fov: bool = True,
+    heading_offset_deg: float = 0.0,
+    roll_deg: float = 0.0,
+) -> List[Dict[str, object]]:
+    """Devuelve frames con proyección a coordenadas de pantalla.
+
+    Para cada constelación visible (según parámetros), retorna `screen_stars` con
+    x/y en píxeles. Si `include_offscreen=False`, descarta estrellas fuera del FOV.
+    """
+    frames = get_all_constellations_frames(
+        latitude_deg=latitude_deg,
+        longitude_deg=longitude_deg,
+        when_iso_utc=when_iso_utc,
+        minimum_altitude_deg=minimum_altitude_deg,
+        names=names,
+        include_below_horizon=include_below_horizon,
+        fov_center_az_deg=fov_center_az_deg,
+        fov_center_alt_deg=fov_center_alt_deg,
+        fov_h_deg=fov_h_deg,
+        fov_v_deg=fov_v_deg,
+        clip_edges_to_fov=clip_edges_to_fov,
+    )
+
+    half_w = float(width_px) / 2.0
+    half_h = float(height_px) / 2.0
+    cos_r = math.cos(math.radians(roll_deg))
+    sin_r = math.sin(math.radians(roll_deg))
+
+    def to_screen(az: float, alt: float) -> Dict[str, float]:
+        dx = _wrap_delta_az_deg(az, fov_center_az_deg + heading_offset_deg)
+        dy = alt - fov_center_alt_deg
+        x = (dx / fov_h_deg) * float(width_px)
+        y = -(dy / fov_v_deg) * float(height_px)
+        # rotate by roll around screen center
+        xr = x * cos_r - y * sin_r
+        yr = x * sin_r + y * cos_r
+        return {"x_px": float(half_w + xr), "y_px": float(half_h + yr)}
+
+    projected: List[Dict[str, object]] = []
+    for frame in frames:
+        stars = frame.get("stars")
+        if not isinstance(stars, list):
+            projected.append(frame)
+            continue
+        screen_stars: List[Dict[str, object]] = []
+        pos_by_name: Dict[str, Dict[str, float]] = {}
+        for s in stars:
+            if not isinstance(s, dict):
+                continue
+            az = float(s.get("azimuth_deg", 0.0))
+            alt = float(s.get("altitude_deg", -90.0))
+            inside = _is_inside_fov(
+                az_deg=az,
+                alt_deg=alt,
+                fov_center_az_deg=fov_center_az_deg,
+                fov_center_alt_deg=fov_center_alt_deg,
+                fov_h_deg=fov_h_deg,
+                fov_v_deg=fov_v_deg,
+            )
+            if not include_offscreen and not inside:
+                continue
+            pt = to_screen(az, alt)
+            item = {
+                "name": s.get("name"),
+                "magnitude": s.get("magnitude"),
+                "azimuth_deg": az,
+                "altitude_deg": alt,
+                "x_px": pt["x_px"],
+                "y_px": pt["y_px"],
+            }
+            screen_stars.append(item)
+            pos_by_name[str(s.get("name"))] = pt
+
+        # Opcional: edges en pantalla si ambos extremos presentes
+        screen_edges: List[List[float]] = []
+        edges = frame.get("edges")
+        if isinstance(edges, list):
+            for e in edges:
+                if not isinstance(e, list) or len(e) != 2:
+                    continue
+                a, b = str(e[0]), str(e[1])
+                if a in pos_by_name and b in pos_by_name:
+                    pa = pos_by_name[a]
+                    pb = pos_by_name[b]
+                    screen_edges.append([pa["x_px"], pa["y_px"], pb["x_px"], pb["y_px"]])
+
+        new_frame = dict(frame)
+        new_frame["screen_stars"] = screen_stars
+        new_frame["screen_edges"] = screen_edges
+        projected.append(new_frame)
+
+    return projected
 
