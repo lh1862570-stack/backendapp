@@ -13,6 +13,7 @@ from typing import Dict, List, Optional
 from skyfield.api import Star, load, wgs84
 from skyfield import almanac
 from constellations import get_constellation_definition, list_constellations
+from iau import get_iau_constellation_centroids
 
 
 @dataclass
@@ -1016,6 +1017,52 @@ def project_constellations_to_screen(
         projected.append(new_frame)
 
     return projected
+
+
+def resolve_iau_in_fov(
+    *,
+    latitude_deg: float,
+    longitude_deg: float,
+    when_iso_utc: Optional[str],
+    fov_center_az_deg: float,
+    fov_center_alt_deg: float,
+    fov_h_deg: float,
+    fov_v_deg: float,
+) -> Optional[str]:
+    """Resuelve la constelación IAU cuyo centro (aprox) cae dentro del FOV.
+
+    Usa centroides aproximados a partir de los límites IAU. Convierte RA/Dec de
+    cada centro a alt-az con Skyfield y verifica si cae dentro del FOV.
+    """
+    ts = load.timescale()
+    dt = _parse_iso_datetime_utc(when_iso_utc)
+    t = ts.from_datetime(dt)
+    observer = wgs84.latlon(latitude_degrees=float(latitude_deg), longitude_degrees=float(longitude_deg))
+
+    centroids = get_iau_constellation_centroids()
+
+    def inside(az: float, alt: float) -> bool:
+        dx = abs(_wrap_delta_az_deg(az, fov_center_az_deg))
+        dy = abs(alt - fov_center_alt_deg)
+        return dx <= fov_h_deg / 2.0 and dy <= fov_v_deg / 2.0
+
+    best_name: Optional[str] = None
+    best_dist = 1e9
+    for name, (ra_c, dec_c) in centroids.items():
+        # Convertir RA/Dec a alt-az
+        sf_star = Star(ra_hours=float(ra_c) / 15.0, dec_degrees=float(dec_c))
+        alt, az, _ = observer.at(t).observe(sf_star).apparent().altaz()
+        az_deg = float(az.degrees) % 360.0
+        alt_deg = float(alt.degrees)
+        if inside(az_deg, alt_deg):
+            dx = _wrap_delta_az_deg(az_deg, fov_center_az_deg)
+            dy = alt_deg - fov_center_alt_deg
+            d = (dx * dx + dy * dy) ** 0.5
+            if d < best_dist:
+                best_dist = d
+                best_name = name
+
+    return best_name
 
 
 def _euclid_dist2(ax: float, ay: float, bx: float, by: float) -> float:
